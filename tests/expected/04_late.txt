@@ -1,0 +1,5 @@
+1:00 walk: missed
+2:00 walk: missed
+3:00 walk: late
+4:00 walk: missed
+5:00 walk: missed

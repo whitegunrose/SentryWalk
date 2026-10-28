@@ -1,0 +1,5 @@
+1:00 walk: complete, SYNCED LATE
+2:00 walk: missed
+3:00 walk: missed
+4:00 walk: missed
+5:00 walk: missed
