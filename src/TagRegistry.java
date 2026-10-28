@@ -21,10 +21,17 @@ public class TagRegistry {
         TagRegistry tags = new TagRegistry();
         List<String> lines = Files.readAllLines(Path.of(path));
 
-        // TODO (Kevin):
-        // 1. Loop over the lines, starting at index 1 (index 0 is the header).
-        // 2. Split each line on ",": parts[0] is the tag ID, parts[1] is the checkpoint.
-        // 3. tags.tagToCheckpoint.put(tagId, checkpoint);
+        // Line 3: tag ID -> checkpoint. Start at index 1 to skip the header
+        for(int i = 1; i < lines.size(); i++) {
+            String[] parts = lines.get(i).split(",");
+            if(parts.length < 2) {
+                // skip blank or broken lines
+                continue;
+            }
+            String tagId = parts[0].trim();
+            String checkpoint = parts[1].trim();
+            tags.tagToCheckpoint.put(tagId, checkpoint);
+        }
 
         return tags;
     }

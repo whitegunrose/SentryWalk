@@ -20,15 +20,40 @@ public class RouteReader {
         RouteSettings route = new RouteSettings();
         List<String> lines = Files.readAllLines(Path.of(path));
 
-        // TODO (Brandon):
-        // 1. Loop over the lines. Skip empty lines and lines that start with "#".
-        // 2. Split each line into key and value:  String[] kv = line.split("=", 2);
-        // 3. Depending on the key, fill in the matching field of route:
-        //      "checkpoints"        -> split the value on "," and add each one to route.checkpoints
-        //      "walk_starts"        -> split on ",", LocalDateTime.parse(...) each, add to route.walkStarts
-        //      "shift_end"          -> route.shiftEnd = LocalDateTime.parse(value)
-        //      "time_limit_minutes" -> route.timeLimitMinutes = Integer.parseInt(value)
-        // Tip: call .trim() on keys and values so extra spaces don't break anything.
+        for(String line : lines) {
+            line = line.trim();
+
+            // Skip empty lines and comments
+            if(line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+
+            // Split "key=value" into its two parts
+            String[] keyValue = line.split("=", 2);
+            if(keyValue.length < 2) {
+                continue;
+            }
+
+            String key = keyValue[0].trim();
+            String value = keyValue[1].trim();
+
+            if(key.equals("checkpoints")) {
+                for(String checkpoint : value.split(",")) {
+                    route.checkpoints.add(checkpoint.trim());
+                }
+            }
+            else if(key.equals("walk_starts")) {
+                for(String time : value.split(",")) {
+                    route.walkStarts.add(LocalDateTime.parse(time.trim()));
+                }
+            }
+            else if(key.equals("shift_end")) {
+                route.shiftEnd = LocalDateTime.parse(value);
+            }
+            else if(key.equals("time_limit_minutes")) {
+                route.timeLimitMinutes = Integer.parseInt(value);
+            }
+        }
 
         return route;
     }
