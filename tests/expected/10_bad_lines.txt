@@ -1,0 +1,9 @@
+warning: line 4
+warning: line 5
+warning: line 6
+warning: line 7
+1:00 walk: complete
+2:00 walk: missed
+3:00 walk: missed
+4:00 walk: missed
+5:00 walk: missed

@@ -1,0 +1,5 @@
+1:00 walk: incomplete (missing E)
+2:00 walk: incomplete (missing A, B, C, D)
+3:00 walk: missed
+4:00 walk: missed
+5:00 walk: missed

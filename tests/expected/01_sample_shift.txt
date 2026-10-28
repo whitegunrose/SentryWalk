@@ -1,0 +1,8 @@
+warning: line 12
+warning: line 17
+warning: line 18
+1:00 walk: complete
+2:00 walk: incomplete (missing E)
+3:00 walk: complete, LONG GAP B-C 15 min, SYNCED LATE
+4:00 walk: missed
+5:00 walk: late
