@@ -108,7 +108,7 @@ public class DemoRunner {
         System.out.println("WALK " + walkNumber + " | " +
                 walk.walkStart.format(DATE_TIME_FORMAT));
 
-        System.out.println("Result: " + walk.result.toUpperCase());
+        System.out.println(ReportPrinter.format(walk));
 
         System.out.println();
         System.out.println("CHECKPOINT SCANS");
