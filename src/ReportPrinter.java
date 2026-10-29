@@ -20,17 +20,20 @@ public class ReportPrinter {
 
         // StringBuilder really did make this easy wow
         StringBuilder sb = new StringBuilder();
-
+        
+        // Format the walk start time and result
         sb.append(walk.walkStart.format(HOUR))
                 .append(" walk: ")
                 .append(walk.result);
-
-        if (walk.result == WalkResult.INCOMPLETE) {
+        
+        // If the walk is incomplete, append the missing items
+        if (WalkResult.INCOMPLETE.equals(walk.result)) {
             sb.append(" (missing ")
                     .append(String.join(", ", walk.missing))
                     .append(")");
         }
-
+        
+        // If there are any flags then append
         for (String flag : walk.flags) {
             sb.append(", ")
                     .append(flag);
