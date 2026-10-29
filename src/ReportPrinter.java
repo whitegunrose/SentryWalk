@@ -13,16 +13,10 @@ import java.time.format.DateTimeFormatter;
  */
 public class ReportPrinter {
 
-    /** "H:mm" prints 1:00, not 01:00. */
+    /** "H:mm" prints 1:00, "HH:mm" prints 01:00. */
     private static final DateTimeFormatter HOUR = DateTimeFormatter.ofPattern("H:mm");
 
     public static String format(WalkResult walk) {
-        // TODO (Johnny):
-        // 1. Start with walk.walkStart.format(HOUR) + " walk: " + walk.result
-        // 2. If the result is WalkResult.INCOMPLETE, add " (missing " + String.join(",
-        // ", walk.missing) + ")"
-        // 3. For each flag in walk.flags, add ", " + flag
-        // Tip: a StringBuilder makes this easy.
 
         // StringBuilder really did make this easy wow
         StringBuilder sb = new StringBuilder();
