@@ -1,9 +1,10 @@
+
 import java.time.Duration;
 import java.util.List;
 
 /**
  * Adds LONG GAP and SYNCED LATE flags to one walk (algorithm lines 30-36).
- * Owner: Johnny
+ * Owner: Ryan
  */
 public class FlagChecker {
 
@@ -13,16 +14,30 @@ public class FlagChecker {
     public static void addFlags(WalkResult walk) {
         List<Event> s = walk.scans;   // already sorted, repeats removed
 
-        // TODO (Johnny), lines 31-35:
-        //   For each pair of scans in a row (s.get(k) and s.get(k + 1)):
-        //     long gap = Duration.between(first.happened, second.happened).toMinutes();
-        //     (toMinutes() rounds down: 15 min 30 s -> 15)
-        //     if gap >= LONG_GAP_MINUTES, add exactly this text to walk.flags:
-        //       "LONG GAP " + first.checkpoint + "-" + second.checkpoint + " " + gap + " min"
-        //       e.g. "LONG GAP B-C 15 min"
+        // Lines 31-35: Check the gap between each pair of consecutive scans.
+        for (int k = 0; k < s.size() - 1; k++) {
+            Event first = s.get(k);
+            Event second = s.get(k + 1);
 
-        // TODO (Johnny), line 36:
-        //   If any scan in s has syncedLate == true, add "SYNCED LATE" to walk.flags (only once).
-        //   Add it AFTER the LONG GAP flags so the order matches the expected output.
+            long gap = Duration.between(
+                first.happened,
+                second.happened
+            ).toMinutes();
+
+            if (gap >= LONG_GAP_MINUTES) {
+                walk.flags.add(
+                    "LONG GAP " + first.checkpoint + "-"
+                    + second.checkpoint + " " + gap + " min"
+                );
+            }
+        }
+
+        // Line 36: Add SYNCED LATE once, after all LONG GAP flags.
+        for (Event event : s) {
+            if (event.syncedLate) {
+                walk.flags.add("SYNCED LATE");
+                break;
+            }
+        }
     }
 }

@@ -18,16 +18,47 @@ public class TestRunner {
         File[] files = new File("tests/data").listFiles((dir, name) -> name.endsWith(".csv"));
         Arrays.sort(files);
 
-        // TODO (Ryan): for each file f in files:
-        //   1. String name = f.getName().replace(".csv", "");          e.g. "04_late"
-        //   2. List<String> expected = Files.readAllLines(Path.of("tests", "expected", name + ".txt"));
-        //   3. List<String> actual = Main.run("inputs/R_route.txt", "inputs/T_tags.csv", f.getPath());
-        //   4. Compare the two lists line by line (they may have different lengths).
-        //      All lines equal -> print "PASS  " + name
-        //      Otherwise       -> print "FAIL  " + name + " line N: expected \"...\" but got \"...\""
-        //                         for the FIRST line that differs, so it's easy to debug.
-        //   5. At the end print: passed + " of " + files.length + " tests passed"
+        
+int passed = 0;
 
-        System.out.println("TestRunner is not written yet (" + files.length + " test files found)");
+for (File f : files) {
+    String name = f.getName().replace(".csv", "");
+
+    List<String> expected = Files.readAllLines(
+        Path.of("tests", "expected", name + ".txt")
+    );
+
+    List<String> actual = Main.run(
+        "inputs/R_route.txt",
+        "inputs/T_tags.csv",
+        f.getPath()
+    );
+
+    int maxLines = Math.max(expected.size(), actual.size());
+    boolean match = true;
+
+    for (int i = 0; i < maxLines; i++) {
+        String expectedLine = i < expected.size() ? expected.get(i) : "<no line>";
+        String actualLine = i < actual.size() ? actual.get(i) : "<no line>";
+
+        if (!expectedLine.equals(actualLine)) {
+            System.out.println(
+                "FAIL  " + name + " line " + (i + 1)
+                + ": expected \"" + expectedLine
+                + "\" but got \"" + actualLine + "\""
+            );
+            match = false;
+            break;
+        }
+    }
+
+    if (match) {
+        System.out.println("PASS  " + name);
+        passed++;
+    }
+}
+
+System.out.println(passed + " of " + files.length + " tests passed");
+
     }
 }
