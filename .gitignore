@@ -1,3 +1,10 @@
 *.class
 out/
 .DS_Store
+
+# Live scan data written by the server
+data/
+
+# Go server binary (go build)
+server/server
+server/sentrywalk-server
