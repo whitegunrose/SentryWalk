@@ -104,6 +104,12 @@ func (s *Server) Routes() http.Handler {
 	})
 	mux.HandleFunc("POST /scans", s.handleScan)
 	mux.HandleFunc("GET /scans", s.handleList)
+
+	// Tag links opened in the phone's browser (see tap.go)
+	mux.HandleFunc("GET /guard", s.handleGuardForm)
+	mux.HandleFunc("POST /guard", s.handleGuardSave)
+	mux.HandleFunc("GET /scan", s.handleTap)
+	mux.HandleFunc("GET /scan/ok", s.handleTapResult)
 	return mux
 }
 

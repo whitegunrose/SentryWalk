@@ -44,6 +44,21 @@ curl -X POST localhost:8000/scans \
 | `POST /scans` | Saves one scan. Body: `scan_id`, `tag_id`, `guard_id`, `scanned_at` (required), `ndef_url`, `tag_type` (optional). Returns `{"status":"saved"/"duplicate","checkpoint":"A","known_tag":true}`. |
 | `GET /scans?limit=50` | Most recent scans first, from `data/scans.jsonl` |
 | `GET /health` | `{"ok":true}` |
+| `GET /scan?tag=04A19F22` | The link written on a tag. Saves a scan for the guard in this browser's cookie, then shows the result page. No guard set yet → sends the browser to `/guard` first. |
+| `GET /guard`, `POST /guard` | Page where a guard sets their ID once per phone (kept in a cookie for a year) |
+| `GET /scan/ok` | Result page after a tap. Shows the scan, saves nothing. |
+
+## Tag links (test without the app)
+
+Write a URL record to each tag (e.g. with the NFC Tools app: Write → Add a record → URL):
+
+```
+http://<your computer's IP>:8000/scan?tag=04A19F22
+```
+
+Use a tag ID from `inputs/T_tags.csv`, so the scan gets a checkpoint. Tapping the tag with an unlocked Android phone opens the link in the browser; an iPhone XS or newer shows a banner to tap instead. The first tap on a phone asks for the guard ID, then records the scan.
+
+Link scans go to the same `E_live.csv` and `scans.jsonl` as app scans (`tag_type` is `ndef-link`). `happened` and `arrived` are both the server's time, because the browser sends the scan right away. Differences from the app: no offline queue, and anyone who knows a link can type it in (NTAG 424 DNA signed links fix that later).
 
 Bad input gets a 400 (not JSON) or 422 (missing or invalid field) with `{"error": "..."}`.
 
@@ -54,6 +69,8 @@ Bad input gets a 400 (not JSON) or 422 (missing or invalid field) with `{"error"
 | `main.go` | Reads the command-line options and starts the server |
 | `server.go` | Endpoints, input checks, writing E and the scan log, reading T |
 | `server_test.go` | Tests (each test runs a server on files in a temp folder) |
+| `tap.go` | Tag links: `/scan`, `/guard`, and the result page |
+| `tap_test.go` | Tests for the tag links |
 
 ## Rules it follows
 
