@@ -58,6 +58,26 @@ class _ScanScreenState extends State<ScanScreen> {
   void initState() {
     super.initState();
     _init();
+
+  static const _allCheckpoints = ['A', 'B', 'C', 'D', 'E']; // must match result.checkpoint values
+  final _visited = <String>{};
+  String? _lastCheckpoint;
+  DateTime? _lastScanTime;
+
+  List<String> get _remaining =>
+      _allCheckpoints.where((c) => !_visited.contains(c)).toList();
+
+  String _fmtTime(DateTime d) {
+    final t = d.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+  }
+
+  void _resetRound() => setState(() {
+        _visited.clear();
+        _lastCheckpoint = null;
+        _lastScanTime = null;
+      });
   }
 
   Future<void> _init() async {
@@ -93,8 +113,17 @@ class _ScanScreenState extends State<ScanScreen> {
         entry = _LogEntry(scan.scannedAt, scan.tagId, 'Saved offline - will sync',
             Icons.cloud_off, Colors.orange);
       } else if (result.knownTag) {
-        entry = _LogEntry(scan.scannedAt, scan.tagId, result.checkpoint!,
-            Icons.check_circle, Colors.green);
+        final cp = result.checkpoint!;
+        final dup = _visited.contains(cp);
+        if (!dup) _visited.add(cp);
+        _lastCheckpoint = cp;
+        _lastScanTime = scan.scannedAt;
+        entry = dup
+            ? _LogEntry(scan.scannedAt, scan.tagId, 'Already scanned: $cp',
+                Icons.warning, Colors.orange)
+            : _LogEntry(scan.scannedAt, scan.tagId, cp,
+                Icons.check_circle, Colors.green);
+      }
       } else {
         entry = _LogEntry(scan.scannedAt, scan.tagId, 'Unregistered tag',
             Icons.help, Colors.amber);
@@ -210,6 +239,26 @@ class _ScanScreenState extends State<ScanScreen> {
                         style: TextStyle(color: theme.colorScheme.error),
                       ),
                     ),
+                  if (_lastCheckpoint != null)
+                    Card(
+                      margin: const EdgeInsets.only(top: 16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Last scan: $_lastCheckpoint',
+                                style: theme.textTheme.titleLarge),
+                            Text('Time: ${_fmtTime(_lastScanTime!)}'),
+                            const SizedBox(height: 8),
+                            Text(_remaining.isEmpty
+                                ? 'Round complete!'
+                                : 'Remaining (${_remaining.length}): ${_remaining.join(', ')}'),
+                            TextButton(onPressed: _resetRound, child: const Text('Start new round')),
+                          ],
+                        ),
+                      ),
+                  ),
                 ],
               ),
             ),
