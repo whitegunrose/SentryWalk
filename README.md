@@ -27,6 +27,9 @@ SentryWalk/
   tests/
     data/            E files, one per test (01_sample_shift.csv ... 10_bad_lines.csv)
     expected/        the exact output each E file should print
+  server/            Go server: receives real scans from phones, writes data/E_live.csv
+  mobile/            Flutter app (Android + iPhone): scans NFC tags, sends them to the server
+  data/              live scan files written by the server (gitignored)
 ```
 
 ## Compile and run
@@ -41,6 +44,39 @@ java -cp out TestRunner
 
 `javac -d out` puts the compiled `.class` files in an `out/` folder, which git ignores.
 The skeleton compiles and runs today. Until the TODOs are filled in, it prints placeholder lines like `1:00 walk: TODO`.
+
+## Live scans (phone → server → Java checker)
+
+The server writes real scans as an E file in the exact format above, so the Java checker runs on live data unchanged:
+
+```
+[NFC tag] --tap--> [mobile app] --POST /scans--> [server] --> data/E_live.csv --> java Main
+```
+
+| E column | Comes from |
+|---|---|
+| `happened` | when the phone read the tag (converted to this computer's local time) |
+| `arrived` | when the server received it, so scans queued offline on the phone get **SYNCED LATE** |
+| `guard` | the Guard ID set in the app |
+| `tag_id` | the tag's UID, looked up in `inputs/T_tags.csv` (the server and the Java code share this file) |
+
+Run the server (Go 1.22+, no packages to install):
+
+```
+cd server
+go run .
+```
+
+Then check a shift:
+
+```
+java -cp out Main inputs/R_route.txt inputs/T_tags.csv data/E_live.csv
+```
+
+- Phone app setup: see [`mobile/README.md`](mobile/README.md).
+- Server details and tests: see [`server/README.md`](server/README.md) (`cd server && go test ./...`)
+- Real tags: replace the IDs in `inputs/T_tags.csv` with your tags' IDs (an unregistered tag shows its ID in the app). Real NTAG IDs are 14 hex digits, like `04A1B2C3D4E5F6`.
+- Real shifts: `inputs/R_route.txt` has fixed 2026-10-20 times. Make a route file with the date and times of the shift you're actually walking.
 
 ## Classes
 

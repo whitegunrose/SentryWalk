@@ -1,0 +1,23 @@
+name: sentrywalk
+description: SentryWalk guard patrol - scan NFC checkpoint tags and report to the server.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_nfc_kit: ^3.5.0      # NFC reading on Android + iOS
+  ndef: ^0.3.1                 # decodes NDEF records (URLs stored on tags)
+  http: ^1.2.0                 # POST scans to the server
+  shared_preferences: ^2.2.0   # settings + offline scan queue
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
