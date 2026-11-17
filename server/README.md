@@ -47,6 +47,9 @@ curl -X POST localhost:8000/scans \
 | `GET /scan?tag=04A19F22` | The link written on a tag. Saves a scan for the guard in this browser's cookie, then shows the result page. No guard set yet → sends the browser to `/guard` first. |
 | `GET /guard`, `POST /guard` | Page where a guard sets their ID once per phone (kept in a cookie for a year) |
 | `GET /scan/ok` | Result page after a tap. Shows the scan, saves nothing. |
+| `GET /dashboard` | Admin dashboard for supervisors (`/` redirects here) |
+| `GET /dashboard/data` | Everything the dashboard shows: recent scans, walks, minimum times, checkpoints |
+| `POST /dashboard/min-times` | Sets a minimum walk time. Body: `{"from":"A","to":"B","minutes":5}`. `minutes: 0` removes it. |
 
 ## Tag links (test without the app)
 
@@ -62,6 +65,16 @@ Link scans go to the same `E_live.csv` and `scans.jsonl` as app scans (`tag_type
 
 Bad input gets a 400 (not JSON) or 422 (missing or invalid field) with `{"error": "..."}`.
 
+## Dashboard
+
+Open `http://localhost:8000/dashboard` on the server computer (or the Tailscale address from another device). It refreshes every 5 seconds and shows:
+
+- **Recent scans:** the same scans the terminal prints, newest first.
+- **Walks:** each guard's scans grouped by hour (the 10:00 PM walk, the 11:00 PM walk, ...). Until guards have scheduled shifts, a walk is simply one guard's scans inside one clock hour; `walkStart` in `dashboard.go` is the one place to change when schedules arrive.
+- **Minimum walk times:** a supervisor sets the fewest minutes it should take to walk between two checkpoints. The rule works in both directions (A↔B). Inside one walk, if a guard scans one checkpoint and then the other sooner than that, the scan and the walk are flagged **TOO FAST**. Exactly the minimum is fine. Rules are saved in `data/min_times.csv` (`-mintimes` to change).
+
+The dashboard has no login yet, so anyone who can reach the server can open it and change minimum times.
+
 ## Files
 
 | File | What it does |
@@ -71,6 +84,9 @@ Bad input gets a 400 (not JSON) or 422 (missing or invalid field) with `{"error"
 | `server_test.go` | Tests (each test runs a server on files in a temp folder) |
 | `tap.go` | Tag links: `/scan`, `/guard`, and the result page |
 | `tap_test.go` | Tests for the tag links |
+| `dashboard.go` | Dashboard endpoints, walks, TOO FAST check, minimum times file |
+| `dashboard.html` | The dashboard page (built into the program with `go:embed`) |
+| `dashboard_test.go` | Tests for the dashboard and TOO FAST |
 
 ## Rules it follows
 

@@ -61,6 +61,10 @@ type Server struct {
 	EventsFile string
 	ScanLog    string
 
+	// MinTimesFile holds the supervisor's minimum walk times (dashboard.go).
+	// NewServer puts it next to the scan log.
+	MinTimesFile string
+
 	// Now returns the current time. Tests replace it to get fixed times.
 	Now func() time.Time
 
@@ -72,11 +76,12 @@ type Server struct {
 // caught after a restart.
 func NewServer(tagsFile, eventsFile, scanLog string) (*Server, error) {
 	s := &Server{
-		TagsFile:   tagsFile,
-		EventsFile: eventsFile,
-		ScanLog:    scanLog,
-		Now:        time.Now,
-		seen:       map[string]bool{},
+		TagsFile:     tagsFile,
+		EventsFile:   eventsFile,
+		ScanLog:      scanLog,
+		MinTimesFile: filepath.Join(filepath.Dir(scanLog), "min_times.csv"),
+		Now:          time.Now,
+		seen:         map[string]bool{},
 	}
 	f, err := os.Open(scanLog)
 	if errors.Is(err, os.ErrNotExist) {
@@ -110,6 +115,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /guard", s.handleGuardSave)
 	mux.HandleFunc("GET /scan", s.handleTap)
 	mux.HandleFunc("GET /scan/ok", s.handleTapResult)
+
+	// Admin dashboard for supervisors (see dashboard.go)
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	})
+	mux.HandleFunc("GET /dashboard", s.handleDashboard)
+	mux.HandleFunc("GET /dashboard/data", s.handleDashboardData)
+	mux.HandleFunc("POST /dashboard/min-times", s.handleMinTime)
 	return mux
 }
 
