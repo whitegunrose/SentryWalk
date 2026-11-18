@@ -61,6 +61,8 @@ http://<your computer's IP>:8000/scan?tag=04A19F22
 
 Use a tag ID from `inputs/T_tags.csv`, so the scan gets a checkpoint. Tapping the tag with an unlocked Android phone opens the link in the browser; an iPhone XS or newer shows a banner to tap instead. The first tap on a phone asks for the guard ID, then records the scan.
 
+The result page also shows the guard's progress on the current walk (one guard's scans inside one clock hour, the same as the dashboard): how many of the route's checkpoints are done, which are left, and "Round complete!" when none are. Tapping a checkpoint already scanned on this walk shows **Already scanned** (the scan is still saved). The checkpoint list comes from the `checkpoints=` line of `inputs/R_route.txt` (`-route` to change); with no route file the page shows no progress.
+
 Link scans go to the same `E_live.csv` and `scans.jsonl` as app scans (`tag_type` is `ndef-link`). `happened` and `arrived` are both the server's time, because the browser sends the scan right away. Differences from the app: no offline queue, and anyone who knows a link can type it in (NTAG 424 DNA signed links fix that later).
 
 Bad input gets a 400 (not JSON) or 422 (missing or invalid field) with `{"error": "..."}`.
@@ -87,6 +89,8 @@ The dashboard has no login yet, so anyone who can reach the server can open it a
 | `dashboard.go` | Dashboard endpoints, walks, TOO FAST check, minimum times file |
 | `dashboard.html` | The dashboard page (built into the program with `go:embed`) |
 | `dashboard_test.go` | Tests for the dashboard and TOO FAST |
+| `progress.go` | Reads the route and works out a guard's remaining checkpoints for the tag-link page |
+| `progress_test.go` | Tests for remaining checkpoints and Already scanned |
 
 ## Rules it follows
 

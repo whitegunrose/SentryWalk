@@ -65,6 +65,11 @@ type Server struct {
 	// NewServer puts it next to the scan log.
 	MinTimesFile string
 
+	// RouteFile is the route R (checkpoints=A,B,...), used by the tag-link
+	// result page to show which checkpoints are left. NewServer puts it next
+	// to the tag list.
+	RouteFile string
+
 	// Now returns the current time. Tests replace it to get fixed times.
 	Now func() time.Time
 
@@ -80,6 +85,7 @@ func NewServer(tagsFile, eventsFile, scanLog string) (*Server, error) {
 		EventsFile:   eventsFile,
 		ScanLog:      scanLog,
 		MinTimesFile: filepath.Join(filepath.Dir(scanLog), "min_times.csv"),
+		RouteFile:    filepath.Join(filepath.Dir(tagsFile), "R_route.txt"),
 		Now:          time.Now,
 		seen:         map[string]bool{},
 	}

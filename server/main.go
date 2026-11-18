@@ -29,6 +29,7 @@ func main() {
 	events := flag.String("events", "../data/E_live.csv", "live events file E written for the Java checker")
 	scanLog := flag.String("log", "../data/scans.jsonl", "full detail of every scan, one JSON object per line")
 	minTimes := flag.String("mintimes", "../data/min_times.csv", "minimum walk times between checkpoints, set on the dashboard")
+	route := flag.String("route", "../inputs/R_route.txt", "route R; its checkpoints line drives \"Remaining\" on the tag-link page")
 	flag.Parse()
 
 	srv, err := NewServer(*tags, *events, *scanLog)
@@ -36,6 +37,7 @@ func main() {
 		log.Fatalf("starting server: %v", err)
 	}
 	srv.MinTimesFile = *minTimes
+	srv.RouteFile = *route
 
 	log.Printf("SentryWalk server listening on %s", *addr)
 	log.Printf("  tags:   %s", *tags)
