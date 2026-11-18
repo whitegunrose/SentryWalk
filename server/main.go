@@ -28,15 +28,20 @@ func main() {
 	tags := flag.String("tags", "../inputs/T_tags.csv", "tag list T (tag_id,checkpoint), shared with the Java checker")
 	events := flag.String("events", "../data/E_live.csv", "live events file E written for the Java checker")
 	scanLog := flag.String("log", "../data/scans.jsonl", "full detail of every scan, one JSON object per line")
+	minTimes := flag.String("mintimes", "../data/min_times.csv", "minimum walk times between checkpoints, set on the dashboard")
+	route := flag.String("route", "../inputs/R_route.txt", "route R; its checkpoints line drives \"Remaining\" on the tag-link page")
 	flag.Parse()
 
 	srv, err := NewServer(*tags, *events, *scanLog)
 	if err != nil {
 		log.Fatalf("starting server: %v", err)
 	}
+	srv.MinTimesFile = *minTimes
+	srv.RouteFile = *route
 
 	log.Printf("SentryWalk server listening on %s", *addr)
 	log.Printf("  tags:   %s", *tags)
 	log.Printf("  events: %s", *events)
+	log.Printf("  dashboard: http://localhost%s/dashboard", *addr)
 	log.Fatal(http.ListenAndServe(*addr, srv.Routes()))
 }

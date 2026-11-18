@@ -20,6 +20,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -139,12 +140,45 @@ func (s *Server) handleTap(w http.ResponseWriter, r *http.Request) {
 // handleTapResult shows what was saved. It saves nothing itself.
 func (s *Server) handleTapResult(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	renderPage(w, http.StatusOK, resultPage, map[string]string{
+	data := map[string]string{
 		"Tag":        q.Get("tag"),
 		"Guard":      q.Get("guard"),
 		"At":         strings.Replace(q.Get("at"), "T", " ", 1),
 		"Checkpoint": q.Get("checkpoint"),
-	})
+	}
+	s.addProgress(data, q.Get("guard"), q.Get("checkpoint"), q.Get("at"))
+	renderPage(w, http.StatusOK, resultPage, data)
+}
+
+// addProgress adds the guard's walk progress to the result page: whether
+// this checkpoint was already scanned, and which checkpoints are left. It
+// adds nothing if the scan has no checkpoint, there is no route, or a file
+// can't be read (the scan itself is already saved, so the page still shows).
+func (s *Server) addProgress(data map[string]string, guard, checkpoint, at string) {
+	happened, err := time.ParseInLocation(javaTime, at, time.Local)
+	if err != nil || guard == "" || checkpoint == "" {
+		return
+	}
+	route, err := loadRoute(s.RouteFile)
+	if err != nil || len(route) == 0 {
+		return
+	}
+	s.mu.Lock()
+	records, err := readScanLog(s.ScanLog)
+	s.mu.Unlock()
+	if err != nil {
+		return
+	}
+
+	p := walkProgress(records, route, guard, checkpoint, happened)
+	data["ShowProgress"] = "yes"
+	data["Walk"] = walkStart(happened).Format("3:04 PM")
+	data["Done"] = strconv.Itoa(len(p.Visited))
+	data["Total"] = strconv.Itoa(len(route))
+	data["Remaining"] = strings.Join(p.Remaining, ", ")
+	if p.AlreadyScanned {
+		data["AlreadyScanned"] = "yes"
+	}
 }
 
 // checkGuardID returns an error message, or "" if the ID is fine.
@@ -195,6 +229,7 @@ dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:16px 0 0}dt{c
 input{font-size:20px;padding:10px;width:100%;box-sizing:border-box;border:1px solid #ccc;border-radius:8px;margin:8px 0 14px}
 button{font-size:18px;padding:12px;width:100%;border:0;border-radius:8px;background:#1a73e8;color:#fff}
 a{color:#1a73e8}
+.progress{margin:16px 0 0;padding:12px 14px;background:#f4f5f7;border-radius:10px;line-height:1.6}.mono{font-family:ui-monospace,monospace}
 </style>`
 
 var guardPage = template.Must(template.New("guard").Parse(`<!doctype html><html><head><meta charset="utf-8"><title>SentryWalk – Guard</title>` + pageStyle + `</head><body><div class="card">
@@ -213,8 +248,11 @@ var guardPage = template.Must(template.New("guard").Parse(`<!doctype html><html>
 
 var resultPage = template.Must(template.New("result").Parse(`<!doctype html><html><head><meta charset="utf-8"><title>SentryWalk – Scan</title>` + pageStyle + `</head><body><div class="card">
 {{if .Error}}<h1 class="err">Scan not saved</h1><p>{{.Error}}</p>
+{{else if .AlreadyScanned}}<h1 class="warn">Already scanned ⚠</h1><div class="big">Checkpoint {{.Checkpoint}}</div><p class="warn">You already scanned {{.Checkpoint}} on this walk. The scan was still saved.</p>
 {{else if .Checkpoint}}<h1 class="ok">Scan saved ✓</h1><div class="big">Checkpoint {{.Checkpoint}}</div>
 {{else}}<h1 class="warn">Saved, but unknown tag</h1><p>This tag isn't in <code>inputs/T_tags.csv</code>. Add <code>{{.Tag}}</code> there to give it a checkpoint.</p>{{end}}
+{{if .ShowProgress}}<div class="progress"><b>{{.Walk}} walk:</b> {{.Done}} of {{.Total}} checkpoints
+{{if .Remaining}}<br>Remaining: <span class="mono">{{.Remaining}}</span>{{else}}<br><span class="ok"><b>Round complete!</b></span>{{end}}</div>{{end}}
 {{if not .Error}}<dl><dt>Guard</dt><dd>{{.Guard}}</dd><dt>Tag</dt><dd>{{.Tag}}</dd><dt>Time</dt><dd>{{.At}}</dd></dl>
 <p style="margin-top:20px"><a href="/guard">Not {{.Guard}}? Change guard</a></p>{{end}}
 </div></body></html>`))

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SentryWalk – Dashboard</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; background: #f4f5f7; color: #1c1e21; }
+  header { background: #1c1e21; color: #fff; padding: 14px 24px; display: flex; align-items: baseline; gap: 16px; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .status { font-size: 13px; color: #aab; }
+  main { padding: 20px 24px; display: grid; gap: 20px; grid-template-columns: 1fr 1fr; max-width: 1400px; }
+  section { background: #fff; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  section.wide { grid-column: 1 / -1; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  p.hint { font-size: 13px; color: #666; margin: 0 0 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+  th { color: #666; font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  td.mono { font-family: ui-monospace, monospace; }
+  .scroll { max-height: 420px; overflow-y: auto; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .fast { background: #fce8e6; color: #c5221f; }
+  .ok { background: #e6f4ea; color: #137333; }
+  .unknown { background: #fef7e0; color: #b06000; }
+  .walk { border: 1px solid #e3e3e3; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .walk.isfast { border-color: #f1a7a1; background: #fffafa; }
+  .walk-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+  .walk-head strong { font-size: 15px; }
+  .path { font-family: ui-monospace, monospace; font-size: 14px; }
+  .flags { margin-top: 6px; font-size: 13px; color: #c5221f; }
+  form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  select, input { font-size: 14px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; }
+  input[type=number] { width: 80px; }
+  button { font-size: 14px; padding: 6px 12px; border: 0; border-radius: 6px; background: #1a73e8; color: #fff; cursor: pointer; }
+  button.link { background: none; color: #c5221f; padding: 0; }
+  .error { color: #c5221f; font-size: 13px; }
+  .empty { color: #888; font-size: 14px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>SentryWalk Dashboard</h1>
+  <span class="status" id="status">Loading…</span>
+</header>
+
+<main>
+  <section>
+    <h2>Recent scans</h2>
+    <p class="hint">Every checkpoint scan, newest first. Updates every 5 seconds.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Guard</th><th>Checkpoint</th><th>Tag</th><th>Source</th><th></th></tr></thead>
+        <tbody id="scans"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Minimum walk times</h2>
+    <p class="hint">The shortest time it should take to walk between two checkpoints (either direction).
+      A guard who scans them faster than this is flagged <span class="badge fast">TOO FAST</span>.</p>
+    <form id="minForm">
+      <select id="minFrom"></select>
+      <span>↔</span>
+      <select id="minTo"></select>
+      <input type="number" id="minMinutes" min="1" max="1440" placeholder="min" required>
+      <span>minutes</span>
+      <button type="submit">Save</button>
+    </form>
+    <div class="error" id="minError"></div>
+    <table>
+      <thead><tr><th>Between</th><th>At least</th><th></th></tr></thead>
+      <tbody id="minTimes"></tbody>
+    </table>
+  </section>
+
+  <section class="wide">
+    <h2>Walks</h2>
+    <p class="hint">Each guard's scans grouped by hourly walk (the 10:00 PM walk, the 11:00 PM walk, …), newest first.</p>
+    <div id="walks"></div>
+  </section>
+</main>
+
+<script>
+// All text from the server goes in with textContent, never innerHTML,
+// because guard IDs are typed in by guards.
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v; else e.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return e;
+}
+
+// The server sends local times without a zone, e.g. 2026-11-10T16:19:43.
+function parseLocal(s) {
+  const [d, t] = s.split('T');
+  const [y, mo, day] = d.split('-').map(Number);
+  const [h, mi, sec] = t.split(':').map(Number);
+  return new Date(y, mo - 1, day, h, mi, sec || 0);
+}
+function fmtTime(s) {
+  return parseLocal(s).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+function fmtClock(s) {
+  return parseLocal(s).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+function fmtWalk(s) {
+  return parseLocal(s).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function source(tagType) {
+  return tagType === 'ndef-link' ? 'Tag link' : 'App';
+}
+function checkpointCell(cp) {
+  return cp ? cp : el('span', { class: 'badge unknown' }, 'UNKNOWN TAG');
+}
+
+function renderScans(scans) {
+  const body = document.getElementById('scans');
+  body.replaceChildren();
+  if (scans.length === 0) {
+    body.append(el('tr', {}, el('td', { colspan: 6, class: 'empty' }, 'No scans yet.')));
+    return;
+  }
+  for (const s of scans) {
+    body.append(el('tr', {},
+      el('td', {}, fmtTime(s.happened)),
+      el('td', {}, s.guard),
+      el('td', {}, checkpointCell(s.checkpoint)),
+      el('td', { class: 'mono' }, s.tag_id),
+      el('td', {}, source(s.tag_type)),
+      el('td', {}, s.too_fast ? el('span', { class: 'badge fast' }, 'TOO FAST') : null),
+    ));
+  }
+}
+
+function renderWalks(walks) {
+  const box = document.getElementById('walks');
+  box.replaceChildren();
+  if (walks.length === 0) {
+    box.append(el('p', { class: 'empty' }, 'No walks yet.'));
+    return;
+  }
+  for (const w of walks) {
+    const path = el('div', { class: 'path' });
+    w.scans.forEach((s, i) => {
+      if (i > 0) path.append(' → ');
+      const label = (s.checkpoint || '?') + ' ' + fmtClock(s.happened);
+      path.append(s.too_fast ? el('span', { class: 'badge fast' }, label) : label);
+    });
+    box.append(el('div', { class: 'walk' + (w.too_fast ? ' isfast' : '') },
+      el('div', { class: 'walk-head' },
+        el('strong', {}, 'Guard ' + w.guard),
+        el('span', {}, 'Walk at ' + fmtWalk(w.start)),
+        w.too_fast ? el('span', { class: 'badge fast' }, 'TOO FAST') : el('span', { class: 'badge ok' }, 'OK'),
+      ),
+      path,
+      w.flags.length ? el('div', { class: 'flags' }, w.flags.join(' · ')) : null,
+    ));
+  }
+}
+
+function renderMinTimes(rules) {
+  const body = document.getElementById('minTimes');
+  body.replaceChildren();
+  if (rules.length === 0) {
+    body.append(el('tr', {}, el('td', { colspan: 3, class: 'empty' }, 'None set yet.')));
+    return;
+  }
+  for (const m of rules) {
+    const remove = el('button', { class: 'link', type: 'button' }, 'Remove');
+    remove.onclick = () => saveMinTime(m.from, m.to, 0);
+    body.append(el('tr', {},
+      el('td', {}, m.from + ' ↔ ' + m.to),
+      el('td', {}, m.minutes + ' min'),
+      el('td', {}, remove),
+    ));
+  }
+}
+
+// Fill the checkpoint dropdowns, keeping whatever is selected.
+function renderCheckpoints(cps) {
+  for (const [id, pick] of [['minFrom', 0], ['minTo', 1]]) {
+    const sel = document.getElementById(id);
+    const current = sel.value;
+    if ([...sel.options].map(o => o.value).join() === cps.join()) continue;
+    sel.replaceChildren(...cps.map(c => el('option', { value: c }, c)));
+    sel.value = cps.includes(current) ? current : (cps[pick] || cps[0] || '');
+  }
+}
+
+async function refresh() {
+  const status = document.getElementById('status');
+  try {
+    const res = await fetch('/dashboard/data', { cache: 'no-store' });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    const data = await res.json();
+    renderScans(data.scans);
+    renderWalks(data.walks);
+    renderMinTimes(data.min_times);
+    renderCheckpoints(data.checkpoints);
+    status.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (err) {
+    status.textContent = 'Can’t reach the server: ' + err.message;
+  }
+}
+
+async function saveMinTime(from, to, minutes) {
+  const msg = document.getElementById('minError');
+  msg.textContent = '';
+  try {
+    const res = await fetch('/dashboard/min-times', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, minutes }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || res.statusText);
+    await refresh();
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+}
+
+document.getElementById('minForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const minutes = parseInt(document.getElementById('minMinutes').value, 10);
+  saveMinTime(document.getElementById('minFrom').value, document.getElementById('minTo').value, minutes)
+    .then(() => { if (!document.getElementById('minError').textContent) document.getElementById('minMinutes').value = ''; });
+});
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
