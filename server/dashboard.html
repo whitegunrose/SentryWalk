@@ -9,7 +9,7 @@
   header { background: #1c1e21; color: #fff; padding: 14px 24px; display: flex; align-items: baseline; gap: 16px; }
   header h1 { font-size: 20px; margin: 0; }
   header .status { font-size: 13px; color: #aab; }
-  main { padding: 20px 24px; display: grid; gap: 20px; grid-template-columns: 1fr 1fr; max-width: 1400px; }
+  main { padding: 20px 24px; display: grid; gap: 20px; grid-template-columns: 3fr 2fr; max-width: 1500px; }
   section { background: #fff; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
   section.wide { grid-column: 1 / -1; }
   h2 { font-size: 16px; margin: 0 0 10px; }
@@ -36,6 +36,51 @@
   button.link { background: none; color: #c5221f; padding: 0; }
   .error { color: #c5221f; font-size: 13px; }
   .empty { color: #888; font-size: 14px; }
+  .muted { color: #777; }
+  .done-badge { background: #e6f4ea; color: #137333; }
+  .repeat { background: #eef0f3; color: #555; }
+
+  /* Route chips: one per checkpoint on the route. */
+  .chips { display: inline-flex; gap: 4px; vertical-align: middle; }
+  .chip { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+          font-size: 11px; font-weight: 700; box-sizing: border-box; }
+  .chip.done { background: #34a853; color: #fff; }
+  .chip.current { background: #1a73e8; color: #fff; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #8ab4f8; }
+  .chip.left { background: #fff; color: #9aa0a6; border: 2px dashed #c4c7cc; }
+  .chip.missed { background: #fff; color: #c5221f; border: 2px dashed #f1a7a1; }
+  .prog { display: flex; flex-direction: column; gap: 4px; }
+  .prog-label { font-size: 12px; font-weight: 600; color: #444; white-space: nowrap; }
+  .prog-label.complete { color: #137333; }
+
+  /* Walks: hour groups, then a card per guard. */
+  details.hour { border: 1px solid #e3e3e3; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  details.hour > summary { list-style: none; cursor: pointer; padding: 12px 16px; background: #f8f9fa;
+          display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  details.hour > summary::-webkit-details-marker { display: none; }
+  details.hour > summary::before { content: '▸'; color: #888; transition: transform .15s; }
+  details.hour[open] > summary::before { transform: rotate(90deg); }
+  .hour-title { font-size: 16px; font-weight: 700; }
+  .hour-date { color: #666; font-size: 13px; }
+  .hour-stats { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .guards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; padding: 14px 16px; }
+  .gcard { border: 1px solid #e3e3e3; border-left: 5px solid #1a73e8; border-radius: 8px; padding: 12px 14px; background: #fff; }
+  .gcard.complete { border-left-color: #34a853; }
+  .gcard.incomplete { border-left-color: #f29900; }
+  .gcard.isfast { border-left-color: #c5221f; background: #fffafa; }
+  .gcard-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .gcard-head strong { font-size: 15px; }
+  .gcard-head .badges { margin-left: auto; display: flex; gap: 4px; }
+  .bar { height: 8px; background: #eceef1; border-radius: 4px; overflow: hidden; margin: 6px 0 8px; }
+  .bar > div { height: 100%; background: #1a73e8; border-radius: 4px; transition: width .3s; }
+  .gcard.complete .bar > div { background: #34a853; }
+  .gcard.isfast .bar > div { background: #c5221f; }
+  .bar-row { display: flex; justify-content: space-between; font-size: 13px; }
+  .left-text { font-size: 13px; color: #666; margin-top: 6px; }
+  .timeline { list-style: none; padding: 0; margin: 10px 0 0; border-top: 1px solid #f0f0f0; padding-top: 8px; }
+  .timeline li { display: flex; gap: 10px; align-items: center; font-size: 13px; padding: 2px 0; }
+  .timeline .step { width: 22px; text-align: right; color: #999; font-variant-numeric: tabular-nums; }
+  .timeline .cp { font-weight: 700; min-width: 18px; }
+  .timeline .t { color: #666; font-variant-numeric: tabular-nums; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -51,7 +96,7 @@
     <p class="hint">Every checkpoint scan, newest first. Updates every 5 seconds.</p>
     <div class="scroll">
       <table>
-        <thead><tr><th>Time</th><th>Guard</th><th>Checkpoint</th><th>Tag</th><th>Source</th><th></th></tr></thead>
+        <thead><tr><th>Time</th><th>Guard</th><th>Checkpoint</th><th>Tag</th><th>Source</th><th>Walk progress</th><th></th></tr></thead>
         <tbody id="scans"></tbody>
       </table>
     </div>
@@ -78,7 +123,11 @@
 
   <section class="wide">
     <h2>Walks</h2>
-    <p class="hint">Each guard's scans grouped by hourly walk (the 10:00 PM walk, the 11:00 PM walk, …), newest first.</p>
+    <p class="hint">Grouped by hourly walk (the 1:00 PM walk, the 2:00 PM walk, …), newest first, then by guard.
+      Checkpoints can be scanned in any order.
+      <span class="chips" style="margin-left:6px"><span class="chip done">✓</span></span> scanned
+      <span class="chips"><span class="chip left">·</span></span> still to scan
+      <span class="chips"><span class="chip missed">·</span></span> missed (hour over)</p>
     <div id="walks"></div>
   </section>
 </main>
@@ -112,9 +161,6 @@ function fmtTime(s) {
 function fmtClock(s) {
   return parseLocal(s).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
 }
-function fmtWalk(s) {
-  return parseLocal(s).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
 function source(tagType) {
   return tagType === 'ndef-link' ? 'Tag link' : 'App';
 }
@@ -122,11 +168,39 @@ function checkpointCell(cp) {
   return cp ? cp : el('span', { class: 'badge unknown' }, 'UNKNOWN TAG');
 }
 
-function renderScans(scans) {
+// A row of chips, one per route checkpoint. current is the checkpoint
+// just scanned (highlighted); missed marks leftover ones as missed.
+function chips(route, visited, current, missed) {
+  const done = new Set(visited);
+  const box = el('span', { class: 'chips' });
+  for (const cp of route) {
+    let cls = done.has(cp) ? 'done' : (missed ? 'missed' : 'left');
+    if (cp === current) cls = 'current';
+    box.append(el('span', { class: 'chip ' + cls, title: cp + ': ' + (cls === 'left' ? 'still to scan' : cls === 'missed' ? 'missed' : 'scanned') }, cp));
+  }
+  return box;
+}
+
+// "Checkpoint 3 of 5" with the route chips, for one row of Recent scans.
+function scanProgress(s, route) {
+  const p = s.progress;
+  if (!p) return el('span', { class: 'muted' }, '—');
+  let text, cls = 'prog-label';
+  if (p.off_route) text = 'Not on route · ' + p.done + ' of ' + p.total;
+  else if (p.repeat) text = 'Already scanned · ' + p.done + ' of ' + p.total;
+  else if (p.complete) { text = 'Checkpoint ' + p.done + ' of ' + p.total + ' · Round complete'; cls += ' complete'; }
+  else text = 'Checkpoint ' + p.done + ' of ' + p.total;
+  return el('div', { class: 'prog' },
+    el('span', { class: cls }, text),
+    chips(route, p.visited, p.repeat || p.off_route ? null : s.checkpoint, false),
+  );
+}
+
+function renderScans(scans, route) {
   const body = document.getElementById('scans');
   body.replaceChildren();
   if (scans.length === 0) {
-    body.append(el('tr', {}, el('td', { colspan: 6, class: 'empty' }, 'No scans yet.')));
+    body.append(el('tr', {}, el('td', { colspan: 7, class: 'empty' }, 'No scans yet.')));
     return;
   }
   for (const s of scans) {
@@ -136,35 +210,106 @@ function renderScans(scans) {
       el('td', {}, checkpointCell(s.checkpoint)),
       el('td', { class: 'mono' }, s.tag_id),
       el('td', {}, source(s.tag_type)),
+      el('td', {}, scanProgress(s, route)),
       el('td', {}, s.too_fast ? el('span', { class: 'badge fast' }, 'TOO FAST') : null),
     ));
   }
 }
 
-function renderWalks(walks) {
+// Which hour groups are open. The page redraws every 5 seconds, so this
+// remembers what the supervisor opened or closed. Newest 3 start open.
+const openHours = new Map();
+
+function hourEnded(start) {
+  return parseLocal(start).getTime() + 3600 * 1000 <= Date.now();
+}
+
+// One guard's walk in one hour: status, progress bar, route chips, and
+// every scan in the order it happened.
+function guardCard(w, route) {
+  const p = w.progress;
+  const ended = hourEnded(w.start);
+  let state = 'inprogress', badge = null;
+  if (p && p.complete) { state = 'complete'; badge = el('span', { class: 'badge done-badge' }, 'COMPLETE'); }
+  else if (p && ended) { state = 'incomplete'; badge = el('span', { class: 'badge unknown' }, 'INCOMPLETE'); }
+  else if (p) badge = el('span', { class: 'badge repeat' }, 'IN PROGRESS');
+
+  const card = el('div', { class: 'gcard ' + state + (w.too_fast ? ' isfast' : '') },
+    el('div', { class: 'gcard-head' },
+      el('strong', {}, 'Guard ' + w.guard),
+      el('span', { class: 'badges' },
+        w.too_fast ? el('span', { class: 'badge fast' }, 'TOO FAST') : null,
+        badge),
+    ),
+  );
+
+  if (p) {
+    const pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    const bar = el('div', { class: 'bar' }, el('div', {}));
+    bar.firstChild.style.width = pct + '%';
+    card.append(
+      el('div', { class: 'bar-row' },
+        el('span', {}, el('b', {}, p.done + ' of ' + p.total), ' checkpoints'),
+        el('span', { class: 'muted' }, pct + '%')),
+      bar,
+      chips(route, p.visited, null, ended),
+      el('div', { class: 'left-text' }, p.complete ? 'All checkpoints scanned.'
+        : (ended ? 'Missed: ' : 'Still to scan: ') + p.remaining.join(', ')),
+    );
+  }
+
+  // The number before each scan is which checkpoint of the route it was
+  // (blank for a repeat, an unknown tag, or a checkpoint not on the route).
+  const list = el('ol', { class: 'timeline' });
+  for (const s of w.scans) {
+    const sp = s.progress;
+    const step = sp && !sp.repeat && !sp.off_route ? String(sp.done) : '';
+    let note = null;
+    if (!s.checkpoint) note = el('span', { class: 'badge unknown' }, 'UNKNOWN TAG');
+    else if (sp && sp.repeat) note = el('span', { class: 'badge repeat' }, 'already scanned');
+    else if (sp && sp.off_route) note = el('span', { class: 'badge unknown' }, 'not on route');
+    list.append(el('li', {},
+      el('span', { class: 'step' }, step),
+      el('span', { class: 'cp' }, s.checkpoint || '?'),
+      el('span', { class: 't' }, fmtClock(s.happened)),
+      s.too_fast ? el('span', { class: 'badge fast' }, 'TOO FAST') : null,
+      note,
+    ));
+  }
+  card.append(list);
+  if (w.flags.length) card.append(el('div', { class: 'flags' }, w.flags.join(' · ')));
+  return card;
+}
+
+function renderWalks(hours, route) {
   const box = document.getElementById('walks');
   box.replaceChildren();
-  if (walks.length === 0) {
+  if (hours.length === 0) {
     box.append(el('p', { class: 'empty' }, 'No walks yet.'));
     return;
   }
-  for (const w of walks) {
-    const path = el('div', { class: 'path' });
-    w.scans.forEach((s, i) => {
-      if (i > 0) path.append(' → ');
-      const label = (s.checkpoint || '?') + ' ' + fmtClock(s.happened);
-      path.append(s.too_fast ? el('span', { class: 'badge fast' }, label) : label);
-    });
-    box.append(el('div', { class: 'walk' + (w.too_fast ? ' isfast' : '') },
-      el('div', { class: 'walk-head' },
-        el('strong', {}, 'Guard ' + w.guard),
-        el('span', {}, 'Walk at ' + fmtWalk(w.start)),
-        w.too_fast ? el('span', { class: 'badge fast' }, 'TOO FAST') : el('span', { class: 'badge ok' }, 'OK'),
+  hours.forEach((h, i) => {
+    const complete = h.walks.filter(w => w.progress && w.progress.complete).length;
+    const fast = h.walks.filter(w => w.too_fast).length;
+    const n = h.walks.length;
+    const start = parseLocal(h.start);
+    const det = el('details', { class: 'hour' });
+    det.open = openHours.has(h.start) ? openHours.get(h.start) : i < 3;
+    det.addEventListener('toggle', () => openHours.set(h.start, det.open));
+    det.append(
+      el('summary', {},
+        el('span', { class: 'hour-title' }, start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' walk'),
+        el('span', { class: 'hour-date' }, start.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })),
+        el('span', { class: 'hour-stats' },
+          el('span', { class: 'badge repeat' }, n + (n === 1 ? ' guard' : ' guards')),
+          route.length ? el('span', { class: 'badge ' + (complete === n ? 'done-badge' : 'repeat') }, complete + ' of ' + n + ' complete') : null,
+          fast ? el('span', { class: 'badge fast' }, fast + ' TOO FAST') : null,
+        ),
       ),
-      path,
-      w.flags.length ? el('div', { class: 'flags' }, w.flags.join(' · ')) : null,
-    ));
-  }
+      el('div', { class: 'guards' }, ...h.walks.map(w => guardCard(w, route))),
+    );
+    box.append(det);
+  });
 }
 
 function renderMinTimes(rules) {
@@ -202,8 +347,8 @@ async function refresh() {
     const res = await fetch('/dashboard/data', { cache: 'no-store' });
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     const data = await res.json();
-    renderScans(data.scans);
-    renderWalks(data.walks);
+    renderScans(data.scans, data.route);
+    renderWalks(data.walk_hours, data.route);
     renderMinTimes(data.min_times);
     renderCheckpoints(data.checkpoints);
     status.textContent = 'Updated ' + new Date().toLocaleTimeString();

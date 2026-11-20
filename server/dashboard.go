@@ -10,6 +10,11 @@ package main
 // scans inside one clock hour (walk 1 at 10:00 PM, walk 2 at 11:00 PM, ...).
 // When schedules arrive, walkStart is the one place to change.
 //
+// Progress: every scan carries where the guard was in that walk at the
+// moment of the scan ("checkpoint 3 of 5", which are done, which are left),
+// using the checkpoints line of the route file. There is no set order yet,
+// so any checkpoint of the route counts toward the walk.
+//
 // Too fast: a supervisor sets the minimum minutes it should take to walk
 // between two checkpoints (A-B 5 = at least 5 minutes from A to B or B to A).
 // Inside one walk, if a guard's scan of one checkpoint follows their scan of
@@ -53,23 +58,49 @@ type DashScan struct {
 	ScanRecord
 	WalkStart string `json:"walk_start"` // start of the hour this scan's walk belongs to
 	TooFast   bool   `json:"too_fast"`   // reached this checkpoint too soon after the previous one
+
+	// Progress is the walk right after this scan. nil when there is no
+	// route file or the tag is unknown.
+	Progress *WalkProgress `json:"progress,omitempty"`
+}
+
+// WalkProgress is how far a guard is through the route in one walk.
+type WalkProgress struct {
+	Done      int      `json:"done"`      // route checkpoints scanned so far
+	Total     int      `json:"total"`     // route checkpoints in all
+	Visited   []string `json:"visited"`   // in route order
+	Remaining []string `json:"remaining"` // in route order
+	Complete  bool     `json:"complete"`  // nothing remaining
+
+	// Only on a scan: this checkpoint was already scanned earlier in the
+	// walk, or it is not on the route at all. Neither moves Done.
+	Repeat   bool `json:"repeat,omitempty"`
+	OffRoute bool `json:"off_route,omitempty"`
 }
 
 // Walk is one guard's scans inside one hour.
 type Walk struct {
-	Guard   string     `json:"guard"`
-	Start   string     `json:"start"`
-	Scans   []DashScan `json:"scans"` // in the order they happened
-	TooFast bool       `json:"too_fast"`
-	Flags   []string   `json:"flags"`
+	Guard    string        `json:"guard"`
+	Start    string        `json:"start"`
+	Scans    []DashScan    `json:"scans"` // in the order they happened
+	TooFast  bool          `json:"too_fast"`
+	Flags    []string      `json:"flags"`
+	Progress *WalkProgress `json:"progress,omitempty"` // after the walk's last scan; nil with no route
+}
+
+// WalkHour is every guard's walk for one hour (the 3:00 PM walk), by guard.
+type WalkHour struct {
+	Start string `json:"start"`
+	Walks []Walk `json:"walks"` // one per guard, sorted by guard
 }
 
 // DashboardData is the JSON behind the page.
 type DashboardData struct {
-	Scans       []DashScan `json:"scans"` // newest first
-	Walks       []Walk     `json:"walks"` // newest first
+	Scans       []DashScan `json:"scans"`      // newest first
+	WalkHours   []WalkHour `json:"walk_hours"` // newest hour first
 	MinTimes    []MinTime  `json:"min_times"`
 	Checkpoints []string   `json:"checkpoints"`
+	Route       []string   `json:"route"` // checkpoints a walk must cover; empty with no route file
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +117,10 @@ func (s *Server) handleDashboardData(w http.ResponseWriter, r *http.Request) {
 		rules, err = loadMinTimes(s.MinTimesFile)
 	}
 	s.mu.Unlock()
+	var route []string
+	if err == nil {
+		route, err = loadRoute(s.RouteFile)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -103,7 +138,10 @@ func (s *Server) handleDashboardData(w http.ResponseWriter, r *http.Request) {
 		sort.Strings(checkpoints)
 	}
 
-	scans, walks := buildWalks(records, rules)
+	if route == nil {
+		route = []string{}
+	}
+	scans, walks := buildWalks(records, rules, route)
 
 	// Newest first, and only the most recent scans.
 	for i, j := 0, len(scans)-1; i < j; i, j = i+1, j-1 {
@@ -115,9 +153,10 @@ func (s *Server) handleDashboardData(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, DashboardData{
 		Scans:       scans,
-		Walks:       walks,
+		WalkHours:   groupByHour(walks),
 		MinTimes:    rules,
 		Checkpoints: checkpoints,
+		Route:       route,
 	})
 }
 
@@ -177,10 +216,10 @@ func (s *Server) handleMinTime(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sortedMinTimes(kept))
 }
 
-// buildWalks groups scans into walks (one guard, one hour) and marks the ones
-// that are too fast. It returns every scan, oldest first, and the walks,
-// newest first.
-func buildWalks(records []ScanRecord, rules []MinTime) ([]DashScan, []Walk) {
+// buildWalks groups scans into walks (one guard, one hour), works out each
+// scan's progress through route, and marks the walks that are too fast. It
+// returns every scan, oldest first, and the walks, newest first.
+func buildWalks(records []ScanRecord, rules []MinTime, route []string) ([]DashScan, []Walk) {
 	minutes := map[[2]string]int{}
 	for _, m := range rules {
 		minutes[[2]string{m.From, m.To}] = m.Minutes
@@ -205,6 +244,11 @@ func buildWalks(records []ScanRecord, rules []MinTime) ([]DashScan, []Walk) {
 	walkIndex := map[key]int{}
 	walks := []Walk{}
 	lastKnown := map[key]int{} // index in all of the walk's previous scan with a checkpoint
+	onRoute := map[string]bool{}
+	for _, cp := range route {
+		onRoute[cp] = true
+	}
+	visited := map[key]map[string]bool{} // route checkpoints each walk has scanned
 	for i := range all {
 		sc := &all[i]
 		k := key{sc.Guard, sc.WalkStart}
@@ -231,6 +275,21 @@ func buildWalks(records []ScanRecord, rules []MinTime) ([]DashScan, []Walk) {
 				}
 			}
 			lastKnown[k] = i
+
+			if len(route) > 0 {
+				if visited[k] == nil {
+					visited[k] = map[string]bool{}
+				}
+				cp := *sc.Checkpoint
+				repeat := visited[k][cp]
+				visited[k][cp] = true
+				p := progressOf(route, visited[k])
+				p.Repeat = repeat
+				p.OffRoute = !onRoute[cp]
+				sc.Progress = &p
+				walkP := progressOf(route, visited[k])
+				walks[wi].Progress = &walkP
+			}
 		}
 		walks[wi].Scans = append(walks[wi].Scans, sc.DashScan)
 	}
@@ -247,6 +306,33 @@ func buildWalks(records []ScanRecord, rules []MinTime) ([]DashScan, []Walk) {
 		return walks[i].Guard < walks[j].Guard
 	})
 	return scans, walks
+}
+
+// progressOf lists which route checkpoints are in visited and which are not.
+func progressOf(route []string, visited map[string]bool) WalkProgress {
+	p := WalkProgress{Total: len(route), Visited: []string{}, Remaining: []string{}}
+	for _, cp := range route {
+		if visited[cp] {
+			p.Visited = append(p.Visited, cp)
+		} else {
+			p.Remaining = append(p.Remaining, cp)
+		}
+	}
+	p.Done = len(p.Visited)
+	p.Complete = p.Done == p.Total
+	return p
+}
+
+// groupByHour puts walks (newest first, then by guard) under their hour.
+func groupByHour(walks []Walk) []WalkHour {
+	hours := []WalkHour{}
+	for _, w := range walks {
+		if n := len(hours); n == 0 || hours[n-1].Start != w.Start {
+			hours = append(hours, WalkHour{Start: w.Start, Walks: []Walk{}})
+		}
+		hours[len(hours)-1].Walks = append(hours[len(hours)-1].Walks, w)
+	}
+	return hours
 }
 
 // walkStart is the start of the walk a scan belongs to: the top of its hour.
