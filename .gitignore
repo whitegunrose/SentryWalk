@@ -8,3 +8,6 @@ data/
 # Go server binary (go build)
 server/server
 server/sentrywalk-server
+
+# AI-DLC planning docs (kept local, not on GitHub)
+aidlc-docs/
